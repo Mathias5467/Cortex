@@ -37,7 +37,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![scan_app_shortcuts, launch_app])
+        .invoke_handler(tauri::generate_handler![scan_app_shortcuts, launch_app, show_in_folder])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -154,6 +154,15 @@ fn scan_app_shortcuts() -> Vec<AppEntry> {
 fn launch_app(path: String) -> Result<(), String> {
     std::process::Command::new("cmd")
         .args(["/C", "start", "", &path])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn show_in_folder(path: String) -> Result<(), String> {
+    std::process::Command::new("explorer")
+        .args(["/select,", &path])
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())

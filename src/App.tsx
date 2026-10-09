@@ -25,6 +25,8 @@ function App() {
     const unlisten = appWindow.onFocusChanged(({ payload: focused}) => {
       if (focused) {
         inputRef.current?.focus();
+      } else {
+        setSearchedTerm("");
       }
     })
 
@@ -44,6 +46,13 @@ function App() {
   }, [selectedIndex]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setSearchedTerm("");
+      getCurrentWindow().hide();
+      return;
+    }
+
     if (filteredApps.length === 0) return;
 
     if (e.key === "ArrowDown") {
@@ -56,12 +65,12 @@ function App() {
       e.preventDefault();
       const app = filteredApps[selectedIndex];
       if (app) {
-        handleLaunch(app.path);
+        if (e.ctrlKey) {
+          handleShowInFolder(app.path);
+        } else {
+          handleLaunch(app.path);
+        }
       }
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setSearchedTerm("");
-      getCurrentWindow().hide();
     }
   }
 
@@ -93,92 +102,129 @@ function App() {
       .map((entry) => entry.app);
   }, [apps, searchedTerm]);
 
+  async function handleShowInFolder(path: string) {
+    try {
+      await invoke("show_in_folder", { path });
+      setSearchedTerm("");
+      await getCurrentWindow().hide();
+    } catch (error) {
+      console.error("Failed to show in folder:", error);
+    }
+  }
 
   return (
-  <div 
-    className="w-full h-screen flex flex-col rounded-xl text-white px-4 py-2 border overflow-hidden"
-    style={{
-      backgroundColor: "var(--bg-app)",
-      borderColor: "var(--border-app)",
-      backdropFilter: "blur(16px)",
-    }}
-  >
-    <input
-      ref={inputRef}
-      autoFocus
-      type="text"
-      placeholder="Search for apps and commands..."
-      value={searchedTerm}
-      onChange={(e) => setSearchedTerm(e.target.value)}
-      onKeyDown={handleKeyDown}
-      className="w-full bg-transparent text-md outline-none py-2 border-b"
+    <div 
+      className="w-full h-screen flex flex-col rounded-xl text-white px-4 py-2 border overflow-hidden"
       style={{
-        color: "var(--text-primary)",
-        borderColor: "var(--border-divider)",
+        backgroundColor: "var(--bg-app)",
+        borderColor: "var(--border-app)",
+        backdropFilter: "blur(16px)",
       }}
-    />
+    >
+      <input
+        ref={inputRef}
+        autoFocus
+        type="text"
+        placeholder="Search for apps and commands..."
+        value={searchedTerm}
+        onChange={(e) => setSearchedTerm(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="w-full bg-transparent text-md outline-none py-2 border-b"
+        style={{
+          color: "var(--text-primary)",
+          borderColor: "var(--border-divider)",
+        }}
+      />
 
-    <div className="mt-2 overflow-y-auto flex-1 pr-1 space-y-1">
-      {filteredApps.map((app, index) => {
-        const isSelected = index === selectedIndex;
-        console.log(index, app.name, app.path);
-        return (
-          <div
-            key={app.path}
-            ref={isSelected ? selectedRef : null}
-            onClick={() => handleLaunch(app.path)}
-            onMouseMove={() => {
-              if (selectedIndex !== index) {
-                setSelectedIndex(index);
-              }
-            }}
-            className="text-sm px-3 py-2 rounded-lg cursor-pointer transition-colors flex justify-between items-center"
-            style={{
-              backgroundColor: isSelected ? "var(--bg-selected)" : "transparent",
-              color: isSelected ? "var(--text-primary)" : "var(--text-secondary)",
-            }}
-          >
-            <div className="flex items-center gap-3">
-              {app.icon ? (
-                <img
-                  src={app.icon}
-                  alt=""
-                  className="w-6 h-6 rounded-md shrink-0 object-contain drop-shadow-sm"
-                />
-              ) : (
-                <div
-                  className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center text-xs font-semibold"
-                  style={{ backgroundColor: "var(--bg-selected)", color: "var(--text-secondary)" }}
+      <div className="mt-2 overflow-y-auto flex-1 pr-1 space-y-1">
+        {filteredApps.map((app, index) => {
+          const isSelected = index === selectedIndex;
+          console.log(index, app.name, app.path);
+          return (
+            <div
+              key={app.path}
+              ref={isSelected ? selectedRef : null}
+              onClick={() => handleLaunch(app.path)}
+              onMouseMove={() => {
+                if (selectedIndex !== index) {
+                  setSelectedIndex(index);
+                }
+              }}
+              className="text-sm px-3 py-2 rounded-lg cursor-pointer transition-colors flex justify-between items-center"
+              style={{
+                backgroundColor: isSelected ? "var(--bg-selected)" : "transparent",
+                color: isSelected ? "var(--text-primary)" : "var(--text-secondary)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                {app.icon ? (
+                  <img
+                    src={app.icon}
+                    alt=""
+                    className="w-6 h-6 rounded-md shrink-0 object-contain drop-shadow-sm"
+                  />
+                ) : (
+                  <div
+                    className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center text-xs font-semibold"
+                    style={{ backgroundColor: "var(--bg-selected)", color: "var(--text-secondary)" }}
+                  >
+                    {app.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="font-medium text-sm">{app.name}</span>
+              </div>
+
+              {isSelected && (
+                <span 
+                  className="text-xs px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "var(--accent-muted)", color: "var(--accent)" }}
                 >
-                  {app.name.charAt(0).toUpperCase()}
-                </div>
+                  Enter
+                </span>
               )}
-              <span className="font-medium text-sm">{app.name}</span>
             </div>
+          );
+        })}
 
-            {isSelected && (
-              <span 
-                className="text-xs px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "var(--accent-muted)", color: "var(--accent)" }}
-              >
-                Enter
-              </span>
-            )}
+        {filteredApps.length === 0 && (
+          <div 
+            className="text-sm px-2 py-6 text-center"
+            style={{ color: "var(--text-placeholder)" }}
+          >
+            No matching applications found
           </div>
-        );
-      })}
+        )}
+      </div>
 
-      {filteredApps.length === 0 && (
-        <div 
-          className="text-sm px-2 py-6 text-center"
-          style={{ color: "var(--text-placeholder)" }}
-        >
-          No matching applications found
+      <div
+        className="mt-2 pt-2 border-t flex items-center justify-between text-xs select-none"
+        style={{
+          borderColor: "var(--border-divider)",
+          color: "var(--text-secondary)",
+        }}
+      >
+        <div className="truncate max-w-[340px] text-[11px] opacity-70">
+          {filteredApps[selectedIndex]?.path || "Cortex Launcher"}
         </div>
-      )}
+
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 font-mono">↵</kbd>
+            <span>Open</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 font-mono">Ctrl</kbd>
+            <kbd className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 font-mono">↵</kbd>
+            <span>Reveal</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded text-[10px] bg-white/10 font-mono">esc</kbd>
+            <span>Close</span>
+          </span>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
 }
 
 export default App;
