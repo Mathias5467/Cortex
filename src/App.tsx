@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { fuzzyScore } from "./utils/fuzzy";
 import "./App.css";
 
 interface AppEntry {
@@ -82,9 +83,14 @@ function App() {
     const term = searchedTerm.trim().toLowerCase();
     if (!term) return apps;
 
-    return apps.filter((app) =>
-      app.name.toLowerCase().includes(term)
-    );
+    return apps.map(
+      (app) => ({
+        app,
+        score: fuzzyScore(term, app.name),
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.app);
   }, [apps, searchedTerm]);
 
 
