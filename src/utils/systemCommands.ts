@@ -2,8 +2,8 @@ export interface SystemCommand {
   id: string;
   name: string;
   description: string;
-  iconName: "lock" | "trash" | "moon" | "power" | "rotate";
-  action: "system" | "web";
+  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette";
+  action: "system" | "web" | "color";
   command?: string;
   urlTemplate?: string;
 }
@@ -48,5 +48,12 @@ export const SYSTEM_COMMANDS: SystemCommand[] = [
     iconName: "power",
     action: "system",
     command: "shutdown",
+  },
+  {
+    id: "pick-color",
+    name: "Color Picker",
+    description: "Sample pixel color under mouse cursor",
+    iconName: "pipette",
+    action: "color",
   },
 ];

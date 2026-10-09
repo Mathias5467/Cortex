@@ -51,6 +51,8 @@ pub fn run() {
             set_app_alias,
             files::search_user_files,
             run_system_command,
+            pick_screen_color,
+            copy_to_clipboard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -269,5 +271,34 @@ fn run_system_command(command: String) -> Result<(), String> {
         }
         _ => return Err("Unknown command".to_string()),
     }
+    Ok(())
+}
+
+#[tauri::command]
+fn pick_screen_color() -> Result<String, String> {
+    unsafe {
+        let mut point = windows::Win32::Foundation::POINT::default();
+        if !windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point).is_ok() {
+            return Err("Failed to get cursor position".to_string());
+        }
+
+        let hdc = windows::Win32::Graphics::Gdi::GetDC(None);
+        let pixel = windows::Win32::Graphics::Gdi::GetPixel(hdc, point.x, point.y);
+        windows::Win32::Graphics::Gdi::ReleaseDC(None, hdc);
+
+        let r = (pixel.0 & 0xFF) as u8;
+        let g = ((pixel.0 >> 8) & 0xFF) as u8;
+        let b = ((pixel.0 >> 16) & 0xFF) as u8;
+
+        Ok(format!("#{:02X}{:02X}{:02X}", r, g, b))
+    }
+}
+
+#[tauri::command]
+fn copy_to_clipboard(text: String) -> Result<(), String> {
+    std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &format!("Set-Clipboard -Value '{}'", text.replace("'", "''"))])
+        .spawn()
+        .map_err(|e| e.to_string())?;
     Ok(())
 }

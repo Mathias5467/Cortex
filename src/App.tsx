@@ -17,10 +17,13 @@ import {
   RotateCw,
   Power,
   Globe,
+  Pipette,
+  Binary,
 } from "lucide-react";
 import { fuzzyScore, calculateFrecency } from "./utils/fuzzy";
 import { evaluateMath, CalcResult } from "./utils/calc";
 import { SYSTEM_COMMANDS, SystemCommand } from "./utils/systemCommands";
+import { evaluateDevTools, DevToolResult } from "./utils/devTools";
 import "./App.css";
 
 interface AppEntry {
@@ -40,6 +43,7 @@ interface FileEntry {
 
 type UnifiedResult =
   | { type: "calc"; data: CalcResult }
+  | { type: "dev"; data: DevToolResult }
   | { type: "command"; data: SystemCommand }
   | { type: "web"; data: { engine: string; query: string; url: string } }
   | { type: "app"; data: AppEntry }
@@ -85,6 +89,30 @@ function App() {
     };
   }, []);
 
+  async function handlePickColor() {
+    if ("EyeDropper" in window) {
+      try {
+        const eyeDropper = new (window as any).EyeDropper();
+        const result = await eyeDropper.open();
+        if (result && result.sRGBHex) {
+          await invoke("copy_to_clipboard", { text: result.sRGBHex });
+        }
+        setSearchedTerm("");
+        await getCurrentWindow().hide();
+      } catch {
+      }
+    } else {
+      try {
+        const hex = await invoke<string>("pick_screen_color");
+        await invoke("copy_to_clipboard", { hex });
+        setSearchedTerm("");
+        await getCurrentWindow().hide();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
   async function loadAliases() {
     try {
       const res = await invoke<Record<string, string>>("get_aliases");
@@ -122,6 +150,11 @@ function App() {
   const allResults = useMemo<UnifiedResult[]>(() => {
     const term = searchedTerm.trim();
     const termLower = term.toLowerCase();
+
+    const devResults: UnifiedResult[] = evaluateDevTools(term).map((d) => ({
+      type: "dev",
+      data: d,
+    }));
 
     const calcResult = evaluateMath(term);
     const calcList: UnifiedResult[] = calcResult
@@ -213,6 +246,7 @@ function App() {
 
     return [
       ...calcList,
+      ...devResults,
       ...webList,
       ...matchedCommands,
       ...appResults.map((a) => ({ type: "app" as const, data: a })),
@@ -260,6 +294,10 @@ function App() {
           shortcut: "↵",
           icon: <Power className="w-3.5 h-3.5" />,
           run: () => {
+            if (currentItem.data.action === "color") {
+              handlePickColor();
+              return;
+            }
             if (currentItem.data.command) {
               invoke("run_system_command", { command: currentItem.data.command });
             }
@@ -296,7 +334,22 @@ function App() {
       ];
     }
 
-    // Now TypeScript knows currentItem is guaranteed to be an App or a File
+    if (currentItem.type === "dev") {
+      return [
+        {
+          id: "copy-dev",
+          label: "Copy to Clipboard",
+          shortcut: "↵",
+          icon: <Copy className="w-3.5 h-3.5" />,
+          run: () => {
+            navigator.clipboard.writeText(currentItem.data.valueToCopy);
+            setSearchedTerm("");
+            getCurrentWindow().hide();
+          },
+        },
+      ];
+    }
+
     const itemPath = currentItem.data.path;
 
     return [
@@ -414,8 +467,15 @@ function App() {
           navigator.clipboard.writeText(selected.data.result.replace(/,/g, ""));
           setSearchedTerm("");
           getCurrentWindow().hide();
+        } else if (selected.type === "dev") {
+          navigator.clipboard.writeText(selected.data.valueToCopy);
+          setSearchedTerm("");
+          getCurrentWindow().hide();
         } else if (selected.type === "command") {
-          if (selected.data.command) {
+          if (selected.data.action === "color") {
+            handlePickColor();
+            return;
+          } else if (selected.data.command) {
             invoke("run_system_command", { command: selected.data.command });
           }
           setSearchedTerm("");
@@ -503,6 +563,9 @@ function App() {
     if (currentItem.type === "web") {
       return `Open URL: ${currentItem.data.url}`;
     }
+    if (currentItem.type === "dev") {
+      return `Copy: ${currentItem.data.title}`;
+    }
     return currentItem.data.path;
   }, [currentItem]);
 
@@ -565,7 +628,9 @@ function App() {
 
           const itemKey =
             entry.type === "calc"
-              ? "calculator-result"
+              ? "calc-result"
+              : entry.type === "dev"
+              ? entry.data.id
               : entry.type === "command"
               ? entry.data.id
               : entry.type === "web"
@@ -578,6 +643,8 @@ function App() {
                 <div className="text-[10px] font-bold tracking-wider text-white/40 px-3 pt-2 pb-1 uppercase">
                   {entry.type === "calc"
                     ? "Calculator"
+                    : entry.type === "dev"
+                    ? "Developer Tools"
                     : entry.type === "web"
                     ? "Web Search"
                     : entry.type === "command"
@@ -595,7 +662,15 @@ function App() {
                     navigator.clipboard.writeText(entry.data.result.replace(/,/g, ""));
                     setSearchedTerm("");
                     getCurrentWindow().hide();
+                  } else if (entry.type === "dev") {
+                    navigator.clipboard.writeText(entry.data.valueToCopy);
+                    setSearchedTerm("");
+                    getCurrentWindow().hide();
                   } else if (entry.type === "command") {
+                    if (entry.data.action === "color") {
+                      handlePickColor();
+                      return;
+                    }
                     if (entry.data.command) {
                       invoke("run_system_command", { command: entry.data.command });
                     }
@@ -625,6 +700,10 @@ function App() {
                     <div className="w-6 h-6 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                       <Calculator className="w-3.5 h-3.5" />
                     </div>
+                  ) : entry.type === "dev" ? (
+                    <div className="w-6 h-6 rounded-md bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                      <Binary className="w-3.5 h-3.5" />
+                    </div>
                   ) : entry.type === "command" ? (
                     <div className="w-6 h-6 rounded-md bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
                       {entry.data.iconName === "lock" && <Lock className="w-3.5 h-3.5" />}
@@ -632,6 +711,7 @@ function App() {
                       {entry.data.iconName === "moon" && <Moon className="w-3.5 h-3.5" />}
                       {entry.data.iconName === "rotate" && <RotateCw className="w-3.5 h-3.5" />}
                       {entry.data.iconName === "power" && <Power className="w-3.5 h-3.5" />}
+                      {entry.data.iconName === "pipette" && <Pipette className="w-3.5 h-3.5" />}
                     </div>
                   ) : entry.type === "web" ? (
                     <div className="w-6 h-6 rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
@@ -674,6 +754,15 @@ function App() {
                         ({entry.data.expression})
                       </span>
                     </div>
+                  ) : entry.type === "dev" ? (
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-sm font-semibold text-white">
+                        {entry.data.title}
+                      </span>
+                      <span className="text-xs text-white/40">
+                        {entry.data.subtitle}
+                      </span>
+                    </div>
                   ) : entry.type === "web" ? (
                     <div className="flex items-baseline gap-2">
                       <span className="font-medium text-sm text-white">
@@ -714,7 +803,11 @@ function App() {
                     }}
                   >
                     <CornerDownLeft className="w-3 h-3" />
-                    {entry.type === "calc" ? "Copy" : "Open"}
+                    {entry.type === "calc" || entry.type === "dev"
+                      ? "Copy"
+                      : entry.type === "web"
+                      ? "Search"
+                      : "Open"}
                   </span>
                 )}
               </div>
@@ -811,4 +904,4 @@ function App() {
   );
 }
 
-export default App;
+export default App
