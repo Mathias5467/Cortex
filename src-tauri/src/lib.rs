@@ -49,7 +49,8 @@ pub fn run() {
             show_in_folder,
             get_aliases,
             set_app_alias,
-            files::search_user_files
+            files::search_user_files,
+            run_system_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -225,4 +226,48 @@ fn set_app_alias(
         .map_err(|e| e.to_string())?
         .set_alias(&alias, &path)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn run_system_command(command: String) -> Result<(), String> {
+    match command.as_str() {
+        "lock" => {
+            unsafe {
+                windows::Win32::System::Shutdown::LockWorkStation()
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        "empty_bin" => {
+            unsafe {
+                windows::Win32::UI::Shell::SHEmptyRecycleBinW(
+                    None,
+                    windows::core::PCWSTR::null(),
+                    windows::Win32::UI::Shell::SHERB_NOCONFIRMATION
+                        | windows::Win32::UI::Shell::SHERB_NOPROGRESSUI
+                        | windows::Win32::UI::Shell::SHERB_NOSOUND,
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+        "sleep" => {
+            std::process::Command::new("rundll32.exe")
+                .args(["powrprof.dll,SetSuspendState", "0,1,0"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "restart" => {
+            std::process::Command::new("shutdown")
+                .args(["/r", "/t", "0"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        "shutdown" => {
+            std::process::Command::new("shutdown")
+                .args(["/s", "/t", "0"])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        _ => return Err("Unknown command".to_string()),
+    }
+    Ok(())
 }

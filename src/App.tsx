@@ -11,9 +11,16 @@ import {
   Copy,
   Tag,
   CornerDownLeft,
+  Lock,
+  Trash2,
+  Moon,
+  RotateCw,
+  Power,
+  Globe,
 } from "lucide-react";
 import { fuzzyScore, calculateFrecency } from "./utils/fuzzy";
 import { evaluateMath, CalcResult } from "./utils/calc";
+import { SYSTEM_COMMANDS, SystemCommand } from "./utils/systemCommands";
 import "./App.css";
 
 interface AppEntry {
@@ -33,6 +40,8 @@ interface FileEntry {
 
 type UnifiedResult =
   | { type: "calc"; data: CalcResult }
+  | { type: "command"; data: SystemCommand }
+  | { type: "web"; data: { engine: string; query: string; url: string } }
   | { type: "app"; data: AppEntry }
   | { type: "file"; data: FileEntry };
 
@@ -119,6 +128,51 @@ function App() {
       ? [{ type: "calc", data: calcResult }]
       : [];
 
+    let webList: UnifiedResult[] = [];
+    if (termLower.startsWith("g ") && term.length > 2) {
+      const q = term.slice(2).trim();
+      webList = [
+        {
+          type: "web",
+          data: {
+            engine: "Google",
+            query: q,
+            url: `https://www.google.com/search?q=${encodeURIComponent(q)}`,
+          },
+        },
+      ];
+    } else if (termLower.startsWith("yt ") && term.length > 3) {
+      const q = term.slice(3).trim();
+      webList = [
+        {
+          type: "web",
+          data: {
+            engine: "YouTube",
+            query: q,
+            url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+          },
+        },
+      ];
+    } else if (termLower.startsWith("gh ") && term.length > 3) {
+      const q = term.slice(3).trim();
+      webList = [
+        {
+          type: "web",
+          data: {
+            engine: "GitHub",
+            query: q,
+            url: `https://github.com/search?q=${encodeURIComponent(q)}`,
+          },
+        },
+      ];
+    }
+
+    const matchedCommands: UnifiedResult[] = term
+      ? SYSTEM_COMMANDS.filter((cmd) => fuzzyScore(termLower, cmd.name) > 0).map(
+          (cmd) => ({ type: "command", data: cmd })
+        )
+      : [];
+
     let appResults: AppEntry[] = [];
     if (!term) {
       appResults = [...apps].sort((a, b) => {
@@ -143,10 +197,27 @@ function App() {
         .map((entry) => entry.app);
     }
 
+    const fallbackWeb: UnifiedResult[] =
+      term && appResults.length === 0 && files.length === 0 && webList.length === 0
+        ? [
+            {
+              type: "web",
+              data: {
+                engine: "Google",
+                query: term,
+                url: `https://www.google.com/search?q=${encodeURIComponent(term)}`,
+              },
+            },
+          ]
+        : [];
+
     return [
       ...calcList,
+      ...webList,
+      ...matchedCommands,
       ...appResults.map((a) => ({ type: "app" as const, data: a })),
       ...files.map((f) => ({ type: "file" as const, data: f })),
+      ...fallbackWeb,
     ];
   }, [apps, searchedTerm, aliases, files]);
 
@@ -181,6 +252,51 @@ function App() {
       ];
     }
 
+    if (currentItem.type === "command") {
+      return [
+        {
+          id: "run-command",
+          label: `Run ${currentItem.data.name}`,
+          shortcut: "↵",
+          icon: <Power className="w-3.5 h-3.5" />,
+          run: () => {
+            if (currentItem.data.command) {
+              invoke("run_system_command", { command: currentItem.data.command });
+            }
+            setSearchedTerm("");
+            getCurrentWindow().hide();
+          },
+        },
+      ];
+    }
+
+    if (currentItem.type === "web") {
+      return [
+        {
+          id: "open-web",
+          label: `Search on ${currentItem.data.engine}`,
+          shortcut: "↵",
+          icon: <Globe className="w-3.5 h-3.5" />,
+          run: () => {
+            invoke("launch_app", { path: currentItem.data.url });
+            setSearchedTerm("");
+            getCurrentWindow().hide();
+          },
+        },
+        {
+          id: "copy-url",
+          label: "Copy Search URL",
+          icon: <Copy className="w-3.5 h-3.5" />,
+          run: () => {
+            navigator.clipboard.writeText(currentItem.data.url);
+            setSearchedTerm("");
+            getCurrentWindow().hide();
+          },
+        },
+      ];
+    }
+
+    // Now TypeScript knows currentItem is guaranteed to be an App or a File
     const itemPath = currentItem.data.path;
 
     return [
@@ -298,6 +414,16 @@ function App() {
           navigator.clipboard.writeText(selected.data.result.replace(/,/g, ""));
           setSearchedTerm("");
           getCurrentWindow().hide();
+        } else if (selected.type === "command") {
+          if (selected.data.command) {
+            invoke("run_system_command", { command: selected.data.command });
+          }
+          setSearchedTerm("");
+          getCurrentWindow().hide();
+        } else if (selected.type === "web") {
+          invoke("launch_app", { path: selected.data.url });
+          setSearchedTerm("");
+          getCurrentWindow().hide();
         } else if (e.ctrlKey) {
           handleShowInFolder(selected.data.path);
         } else {
@@ -371,6 +497,12 @@ function App() {
     if (currentItem.type === "calc") {
       return `Calculator: ${currentItem.data.expression} = ${currentItem.data.result}`;
     }
+    if (currentItem.type === "command") {
+      return `System: ${currentItem.data.description}`;
+    }
+    if (currentItem.type === "web") {
+      return `Open URL: ${currentItem.data.url}`;
+    }
     return currentItem.data.path;
   }, [currentItem]);
 
@@ -431,12 +563,25 @@ function App() {
           const prevEntry = allResults[index - 1];
           const showHeader = !prevEntry || prevEntry.type !== entry.type;
 
+          const itemKey =
+            entry.type === "calc"
+              ? "calculator-result"
+              : entry.type === "command"
+              ? entry.data.id
+              : entry.type === "web"
+              ? entry.data.url
+              : entry.data.path;
+
           return (
-            <div key={entry.type === "calc" ? "calculator-result" : entry.data.path}>
+            <div key={itemKey}>
               {showHeader && (
                 <div className="text-[10px] font-bold tracking-wider text-white/40 px-3 pt-2 pb-1 uppercase">
                   {entry.type === "calc"
                     ? "Calculator"
+                    : entry.type === "web"
+                    ? "Web Search"
+                    : entry.type === "command"
+                    ? "System Commands"
                     : entry.type === "app"
                     ? "Applications"
                     : "Files & Folders"}
@@ -448,6 +593,16 @@ function App() {
                 onClick={() => {
                   if (entry.type === "calc") {
                     navigator.clipboard.writeText(entry.data.result.replace(/,/g, ""));
+                    setSearchedTerm("");
+                    getCurrentWindow().hide();
+                  } else if (entry.type === "command") {
+                    if (entry.data.command) {
+                      invoke("run_system_command", { command: entry.data.command });
+                    }
+                    setSearchedTerm("");
+                    getCurrentWindow().hide();
+                  } else if (entry.type === "web") {
+                    invoke("launch_app", { path: entry.data.url });
                     setSearchedTerm("");
                     getCurrentWindow().hide();
                   } else {
@@ -469,6 +624,18 @@ function App() {
                   {entry.type === "calc" ? (
                     <div className="w-6 h-6 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                       <Calculator className="w-3.5 h-3.5" />
+                    </div>
+                  ) : entry.type === "command" ? (
+                    <div className="w-6 h-6 rounded-md bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                      {entry.data.iconName === "lock" && <Lock className="w-3.5 h-3.5" />}
+                      {entry.data.iconName === "trash" && <Trash2 className="w-3.5 h-3.5" />}
+                      {entry.data.iconName === "moon" && <Moon className="w-3.5 h-3.5" />}
+                      {entry.data.iconName === "rotate" && <RotateCw className="w-3.5 h-3.5" />}
+                      {entry.data.iconName === "power" && <Power className="w-3.5 h-3.5" />}
+                    </div>
+                  ) : entry.type === "web" ? (
+                    <div className="w-6 h-6 rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                      <Globe className="w-3.5 h-3.5" />
                     </div>
                   ) : entry.type === "app" ? (
                     entry.data.icon ? (
@@ -506,6 +673,20 @@ function App() {
                       <span className="text-xs text-white/40 font-mono">
                         ({entry.data.expression})
                       </span>
+                    </div>
+                  ) : entry.type === "web" ? (
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-medium text-sm text-white">
+                        Search {entry.data.engine}
+                      </span>
+                      <span className="text-xs text-white/40 truncate max-w-[320px]">
+                        "{entry.data.query}"
+                      </span>
+                    </div>
+                  ) : entry.type === "command" ? (
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm text-white">{entry.data.name}</span>
+                      <span className="text-[11px] text-white/40">{entry.data.description}</span>
                     </div>
                   ) : (
                     <span className="font-medium text-sm truncate max-w-[420px]">
