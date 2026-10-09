@@ -1,5 +1,6 @@
 mod db;
 mod icons;
+mod files;
 
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
@@ -47,7 +48,8 @@ pub fn run() {
             launch_app,
             show_in_folder,
             get_aliases,
-            set_app_alias
+            set_app_alias,
+            files::search_user_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
