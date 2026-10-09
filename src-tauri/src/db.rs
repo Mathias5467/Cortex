@@ -34,6 +34,48 @@ impl Database {
             )",
             [],
         )?;
+
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS aliases (
+                alias TEXT PRIMARY KEY,
+                path TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn set_alias(&self, alias: &str, path: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO aliases (alias, path)
+             VALUES (?1, ?2)
+             ON CONFLICT(alias) DO UPDATE SET path = ?2",
+            params![alias.to_lowercase().trim(), path],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_aliases(&self) -> Result<std::collections::HashMap<String, String>> {
+        let mut stmt = self.conn.prepare("SELECT alias, path FROM aliases")?;
+        let mut map = std::collections::HashMap::new();
+
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        for row in rows.flatten() {
+            map.insert(row.0, row.1);
+        }
+
+        Ok(map)
+    }
+
+    pub fn remove_alias(&self, alias: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM aliases WHERE alias = ?1",
+            params![alias.to_lowercase().trim()],
+        )?;
         Ok(())
     }
 

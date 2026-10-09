@@ -42,7 +42,13 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![scan_app_shortcuts, launch_app, show_in_folder])
+        .invoke_handler(tauri::generate_handler![
+            scan_app_shortcuts,
+            launch_app,
+            show_in_folder,
+            get_aliases,
+            set_app_alias
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -193,4 +199,28 @@ fn show_in_folder(path: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn get_aliases(
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get_aliases()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_app_alias(
+    alias: String,
+    path: String,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .set_alias(&alias, &path)
+        .map_err(|e| e.to_string())
 }
