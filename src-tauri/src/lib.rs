@@ -1,8 +1,10 @@
+mod db;
 mod icons;
 
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 use std::collections::HashSet;
+use std::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,6 +27,9 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            let database = db::Database::init(app.handle())
+                .expect("failed to initialize sqlite database");
+                app.manage(Mutex::new(database));
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
             app.global_shortcut().register(shortcut)?;
             if let Some(window) = app.get_webview_window("main") {
@@ -47,10 +52,19 @@ struct AppEntry {
     name: String,
     path: String,
     icon: Option<String>,
+    launch_count: i32,
+    last_launched: i64,
 }
 
 #[tauri::command]
-fn scan_app_shortcuts() -> Vec<AppEntry> {
+fn scan_app_shortcuts(
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Vec<AppEntry> {
+    let usage_map = db_state
+        .lock()
+        .map(|db| db.get_usage_map().unwrap_or_default())
+        .unwrap_or_default();
+
     let mut apps = Vec::new();
     let mut seen_names = HashSet::new();
 
@@ -136,10 +150,17 @@ fn scan_app_shortcuts() -> Vec<AppEntry> {
                         let path_str = path.display().to_string();
                         let icon = icons::get_icon_as_base64(&path_str);
 
+                        let (launch_count, last_launched) = usage_map
+                            .get(&path_str)
+                            .copied()
+                            .unwrap_or((0, 0));
+
                         apps.push(AppEntry {
                             name: app_name.to_string(),
                             path: path_str,
                             icon,
+                            launch_count,
+                            last_launched
                         });
                     }
                 }
@@ -151,7 +172,13 @@ fn scan_app_shortcuts() -> Vec<AppEntry> {
 
 
 #[tauri::command]
-fn launch_app(path: String) -> Result<(), String> {
+fn launch_app(
+    path: String,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    if let Ok(db) = db_state.lock() {
+        let _ = db.record_launch(&path);
+    }
     std::process::Command::new("cmd")
         .args(["/C", "start", "", &path])
         .spawn()

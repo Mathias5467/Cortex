@@ -51,3 +51,25 @@ export function fuzzyScore(query: string, target: string): number {
 
   return 0;
 }
+
+export function calculateFrecency(launchCount: number, lastLaunchedSeconds: number): number {
+  if (!launchCount || !lastLaunchedSeconds) return 0;
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const ageSeconds = Math.max(0, nowSeconds - lastLaunchedSeconds);
+
+  let recencyMultiplier = 10;
+  if (ageSeconds < 4 * 3600) {
+    recencyMultiplier = 100;
+  } else if (ageSeconds < 24 * 3600) {
+    recencyMultiplier = 80;
+  } else if (ageSeconds < 3 * 86400) {
+    recencyMultiplier = 60;
+  } else if (ageSeconds < 7 * 86400) {
+    recencyMultiplier = 40;
+  } else if (ageSeconds < 30 * 86400) {
+    recencyMultiplier = 20;
+  }
+
+  return launchCount * recencyMultiplier;
+}

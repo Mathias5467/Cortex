@@ -1,13 +1,15 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { fuzzyScore } from "./utils/fuzzy";
+import { fuzzyScore, calculateFrecency } from "./utils/fuzzy";
 import "./App.css";
 
 interface AppEntry {
   name: string;
   path: string;
   icon?: string;
+  launch_count: number;
+  last_launched: number;
 }
 
 
@@ -83,20 +85,46 @@ function App() {
     }
   }
   async function handleLaunch(path: string) {
-    await invoke("launch_app", {path});
-    setSearchedTerm("");
-    await getCurrentWindow().hide();
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      setApps((prev) =>
+        prev.map((app) =>
+          app.path === path
+            ? { ...app, launch_count: app.launch_count + 1, last_launched: nowSec }
+            : app
+        )
+      );
+
+      await invoke("launch_app", { path });
+      setSearchedTerm("");
+      await getCurrentWindow().hide();
+    } catch (error) {
+      console.error("Failed to launch app:", error);
+    }
   }
 
   const filteredApps = useMemo(() => {
     const term = searchedTerm.trim().toLowerCase();
-    if (!term) return apps;
+    if (!term) {
+      return [...apps].sort((a, b) => {
+        const frecencyA = calculateFrecency(a.launch_count, a.last_launched);
+        const frecencyB = calculateFrecency(b.launch_count, b.last_launched);
+
+        if (frecencyB !== frecencyA) {
+          return frecencyB - frecencyA;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    }
 
     return apps.map(
-      (app) => ({
-        app,
-        score: fuzzyScore(term, app.name),
-      }))
+      (app) => {
+        const matchScore = fuzzyScore(term, app.name);
+        const frecency = calculateFrecency(app.launch_count, app.last_launched);
+        // Matching is primary (multiplied by 10), frecency breaks ties and elevates favorites
+        const totalScore = matchScore > 0 ? matchScore * 10 + frecency : 0;
+        return { app, score: totalScore };
+      })
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.app);
