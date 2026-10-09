@@ -14,14 +14,15 @@
       {
          "title": "Cortex",
           "width": 680,
-          "height": 56,
+          "height": 400,
           "decorations": false,
           "transparent": true,
+          "shadow": false,
           "center": true,
           "resizable": false,
           "skipTaskbar": true,
           "alwaysOnTop": true,
-          "visible": false
+          "visible": true
       }
     ],
     "security": {
