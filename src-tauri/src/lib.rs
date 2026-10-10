@@ -1,6 +1,7 @@
 mod db;
 mod files;
 mod icons;
+mod window_manager;
 
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -118,7 +119,8 @@ pub fn run() {
             get_clipboard_history,
             delete_clipboard_item,
             save_edited_clipboard_item,
-            copy_image_to_clipboard
+            copy_image_to_clipboard,
+            window_manager::snap_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

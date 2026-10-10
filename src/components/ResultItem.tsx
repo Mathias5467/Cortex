@@ -13,6 +13,10 @@ import {
   Pipette,
   Binary,
   ClipboardList,
+  PanelLeft,
+  PanelRight,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { UnifiedResult } from "../types";
 
@@ -62,6 +66,10 @@ export function ResultItem({
             {entry.data.iconName === "power" && <Power className="w-3.5 h-3.5" />}
             {entry.data.iconName === "pipette" && <Pipette className="w-3.5 h-3.5" />}
             {entry.data.iconName === "clipboard" && <ClipboardList className="w-3.5 h-3.5" />}
+            {entry.data.iconName === "window-left" && <PanelLeft className="w-3.5 h-3.5" />}
+            {entry.data.iconName === "window-right" && <PanelRight className="w-3.5 h-3.5" />}
+            {entry.data.iconName === "window-max" && <Maximize2 className="w-3.5 h-3.5" />}
+            {entry.data.iconName === "window-center" && <Minimize2 className="w-3.5 h-3.5" />}
           </div>
         ) : entry.type === "web" ? (
           <div className="w-6 h-6 rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">

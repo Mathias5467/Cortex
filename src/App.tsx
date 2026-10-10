@@ -375,6 +375,9 @@ function App() {
         return;
       }
       if (selected.data.action === "color") handlePickColor();
+      else if (selected.data.action === "window" && selected.data.command) {
+        invoke("snap_window", { action: selected.data.command });
+      }
       else if (selected.data.command) invoke("run_system_command", { command: selected.data.command });
       closeLauncher();
     } else if (selected.type === "web") {

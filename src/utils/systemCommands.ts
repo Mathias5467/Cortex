@@ -2,8 +2,8 @@ export interface SystemCommand {
   id: string;
   name: string;
   description: string;
-  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard";
-  action: "system" | "web" | "color";
+  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard" | "window-left" | "window-right" | "window-max" | "window-center";
+  action: "system" | "web" | "color" | "window";
   command?: string;
   urlTemplate?: string;
 }
@@ -62,5 +62,37 @@ export const SYSTEM_COMMANDS: SystemCommand[] = [
     description: "Sample pixel color under mouse cursor",
     iconName: "pipette",
     action: "color",
+  },
+  {
+    id: "snap-left",
+    name: "Snap Left (50%)",
+    description: "Move window to left half of screen",
+    iconName: "window-left",
+    action: "window",
+    command: "left",
+  },
+  {
+    id: "snap-right",
+    name: "Snap Right (50%)",
+    description: "Move window to right half of screen",
+    iconName: "window-right",
+    action: "window",
+    command: "right",
+  },
+  {
+    id: "snap-max",
+    name: "Maximize Window",
+    description: "Expand window to full screen",
+    iconName: "window-max",
+    action: "window",
+    command: "maximize",
+  },
+  {
+    id: "snap-center",
+    name: "Center Window",
+    description: "Center window with comfortable margins",
+    iconName: "window-center",
+    action: "window",
+    command: "center",
   },
 ];
