@@ -2,7 +2,7 @@ export interface SystemCommand {
   id: string;
   name: string;
   description: string;
-  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette";
+  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard";
   action: "system" | "web" | "color";
   command?: string;
   urlTemplate?: string;
@@ -48,6 +48,13 @@ export const SYSTEM_COMMANDS: SystemCommand[] = [
     iconName: "power",
     action: "system",
     command: "shutdown",
+  },
+  {
+    id: "open-clipboard-history",
+    name: "Clipboard History",
+    description: "Browse and paste copied items (Ctrl+H)",
+    iconName: "clipboard",
+    action: "system",
   },
   {
     id: "pick-color",

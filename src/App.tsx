@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, ExternalLink, FolderOpen, Globe, Power, Tag, Trash2, ClipboardList } from "lucide-react";
+import { Copy, ExternalLink, FolderOpen, Globe, Power, Tag, Trash2 } from "lucide-react";
 import { AppEntry, FileEntry, UnifiedResult, ActionItem } from "./types";
 import { fuzzyScore, calculateFrecency } from "./utils/fuzzy";
 import { evaluateMath } from "./utils/calc";
@@ -104,22 +104,6 @@ function App() {
       webList = [{ type: "web", data: { engine: "GitHub", query: q, url: `https://github.com/search?q=${encodeURIComponent(q)}` } }];
     }
 
-    const isClipQuery = termLower.startsWith("clip") || termLower === "cb" || termLower === "history";
-    const clipboardCommand: UnifiedResult[] = isClipQuery
-      ? [
-          {
-            type: "command",
-            data: {
-              id: "open-clipboard-history",
-              name: "Clipboard History",
-              description: "Prehliadaj a znova použi skopírované texty (alebo stlač Ctrl+H)",
-              iconName: "trash",
-              action: "system",
-            },
-          },
-        ]
-      : [];
-
     const matchedCommands: UnifiedResult[] = term
       ? SYSTEM_COMMANDS.filter((cmd) => fuzzyScore(termLower, cmd.name) > 0).map((cmd) => ({
           type: "command",
@@ -160,7 +144,6 @@ function App() {
       ...devResults,
       ...webList,
       ...matchedCommands,
-      ...clipboardCommand,
       ...appResults.map((a) => ({ type: "app" as const, data: a })),
       ...files.map((f) => ({ type: "file" as const, data: f })),
       ...fallbackWeb,

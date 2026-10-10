@@ -20,6 +20,8 @@ export interface FileEntry {
 export interface ClipboardItem {
   id: number;
   content: string;
+  item_type: "text" | "image";
+  preview?: string;
   timestamp: number;
 }
 

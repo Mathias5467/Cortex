@@ -1,14 +1,11 @@
 mod db;
-mod icons;
 mod files;
+mod icons;
 
-use tauri::Manager;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 use std::collections::HashSet;
 use std::sync::Mutex;
-
-#[derive(Default)]
-struct EditorData(Mutex<Option<(i64, String)>>);
+use tauri::Manager;
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -33,36 +30,69 @@ pub fn run() {
         .setup(|app| {
             let database = db::Database::init(app.handle())
                 .expect("failed to initialize sqlite database");
-            
-            let db_state = std::sync::Arc::new(std::sync::Mutex::new(database));
-            app.manage(db_state.clone());
-            app.manage(EditorData::default());
-            let db_clone = db_state.clone();
+            app.manage(Mutex::new(database));
+
+            let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut clipboard = match arboard::Clipboard::new() {
                     Ok(c) => c,
                     Err(_) => return,
                 };
                 let mut last_text = String::new();
+                let mut last_image_hash = 0usize;
 
                 loop {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    std::thread::sleep(std::time::Duration::from_millis(600));
+
                     if let Ok(current_text) = clipboard.get_text() {
                         let trimmed = current_text.trim();
                         if !trimmed.is_empty() && trimmed != last_text {
                             last_text = trimmed.to_string();
-                            if let Ok(db) = db_clone.lock() {
-                                let _ = db.save_clipboard_entry(trimmed);
+                            if let Some(state) = app_handle.try_state::<Mutex<db::Database>>() {
+                                if let Ok(db) = state.lock() {
+                                    let _ = db.save_clipboard_entry(trimmed);
+                                }
+                            }
+                            continue;
+                        }
+                    }
+
+                    if let Ok(img) = clipboard.get_image() {
+                        let hash = img.width ^ img.height ^ img.bytes.len();
+                        if hash != last_image_hash && img.width > 0 && img.height > 0 {
+                            last_image_hash = hash;
+
+                            if let Some(rgba) = image::RgbaImage::from_raw(
+                                img.width as u32,
+                                img.height as u32,
+                                img.bytes.into_owned(),
+                            ) {
+                                let dynamic_img = image::DynamicImage::ImageRgba8(rgba);
+                                let thumb = dynamic_img.thumbnail(280, 160);
+
+                                let mut png_bytes = std::io::Cursor::new(Vec::new());
+                                if thumb.write_to(&mut png_bytes, image::ImageFormat::Png).is_ok() {
+                                    use base64::Engine;
+                                    let b64 = base64::engine::general_purpose::STANDARD
+                                        .encode(png_bytes.into_inner());
+                                    let preview = format!("data:image/png;base64,{}", b64);
+                                    let dimensions = format!("{} × {}", img.width, img.height);
+
+                                    if let Some(state) = app_handle.try_state::<Mutex<db::Database>>() {
+                                        if let Ok(db) = state.lock() {
+                                            let _ = db.save_clipboard_image(&dimensions, &preview);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             });
-            let database = db::Database::init(app.handle())
-                .expect("failed to initialize sqlite database");
-                app.manage(Mutex::new(database));
+
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
             app.global_shortcut().register(shortcut)?;
+
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
@@ -71,6 +101,7 @@ pub fn run() {
                     }
                 });
             }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -79,16 +110,15 @@ pub fn run() {
             show_in_folder,
             get_aliases,
             set_app_alias,
+            remove_app_alias,
             files::search_user_files,
             run_system_command,
             pick_screen_color,
             copy_to_clipboard,
-            remove_app_alias,
             get_clipboard_history,
             delete_clipboard_item,
-            open_editor_window,
-            get_editor_initial_data,
             save_edited_clipboard_item,
+            copy_image_to_clipboard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -104,9 +134,7 @@ struct AppEntry {
 }
 
 #[tauri::command]
-fn scan_app_shortcuts(
-    db_state: tauri::State<'_, Mutex<db::Database>>,
-) -> Vec<AppEntry> {
+fn scan_app_shortcuts(db_state: tauri::State<'_, Mutex<db::Database>>) -> Vec<AppEntry> {
     let usage_map = db_state
         .lock()
         .map(|db| db.get_usage_map().unwrap_or_default())
@@ -126,37 +154,11 @@ fn scan_app_shortcuts(
     ];
 
     let blocklist = [
-        // English
-        "uninstall",
-        "installer",
-        "documentation",
-        "readme",
-        "read me",
-        "help",
-        "release notes",
-        "license",
-        "manual",
-        "guide",
-        "website",
-        "visit",
-        "setup",
-        "support",
-        "about",
-        "check for updates",
-        "configure",
-        "sample",
-        "Math Input Panel",
-        "Quick Assist",
-        "Node.js command prompt",
-        "Install Additional Tools for Node.js",
-        "OneDrive",
-        "Calculator Suite",
-        // Slovak
-        "odinštalovať",
-        "odinstalovat",
-        "núdzový režim",
-        "predvoľby",
-        "denník telemetrie",
+        "uninstall", "documentation", "readme", "read me", "help",
+        "release notes", "license", "manual", "guide", "website",
+        "visit", "setup", "support", "about", "check for updates",
+        "configure", "sample", "odinštalovať", "odinstalovat",
+        "núdzový režim", "predvoľby", "denník telemetrie",
     ];
 
     let start_menu_dirs = [
@@ -173,22 +175,19 @@ fn scan_app_shortcuts(
             .filter_map(|e| e.ok())
         {
             let path = entry.path();
-            
+
             if path
                 .extension()
                 .and_then(|e| e.to_str())
                 .map_or(false, |ext| ext.eq_ignore_ascii_case("lnk"))
             {
-
-                 let path_lower = path.to_string_lossy().to_lowercase();
-
+                let path_lower = path.to_string_lossy().to_lowercase();
                 if ignored_folders.iter().any(|folder| path_lower.contains(folder)) {
                     continue;
                 }
 
                 if let Some(app_name) = path.file_stem().and_then(|s| s.to_str()) {
                     let lower_name = app_name.to_lowercase();
-
                     if blocklist.iter().any(|word| lower_name.contains(word)) {
                         continue;
                     }
@@ -196,7 +195,6 @@ fn scan_app_shortcuts(
                     if seen_names.insert(lower_name) {
                         let path_str = path.display().to_string();
                         let icon = icons::get_icon_as_base64(&path_str);
-
                         let (launch_count, last_launched) = usage_map
                             .get(&path_str)
                             .copied()
@@ -207,16 +205,16 @@ fn scan_app_shortcuts(
                             path: path_str,
                             icon,
                             launch_count,
-                            last_launched
+                            last_launched,
                         });
                     }
                 }
             }
         }
     }
+
     apps
 }
-
 
 #[tauri::command]
 fn launch_app(
@@ -226,10 +224,12 @@ fn launch_app(
     if let Ok(db) = db_state.lock() {
         let _ = db.record_launch(&path);
     }
+
     std::process::Command::new("cmd")
         .args(["/C", "start", "", &path])
         .spawn()
         .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -267,26 +267,34 @@ fn set_app_alias(
 }
 
 #[tauri::command]
+fn remove_app_alias(
+    path: String,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove_alias_by_path(&path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn run_system_command(command: String) -> Result<(), String> {
     match command.as_str() {
-        "lock" => {
-            unsafe {
-                windows::Win32::System::Shutdown::LockWorkStation()
-                    .map_err(|e| e.to_string())?;
-            }
-        }
-        "empty_bin" => {
-            unsafe {
-                windows::Win32::UI::Shell::SHEmptyRecycleBinW(
-                    None,
-                    windows::core::PCWSTR::null(),
-                    windows::Win32::UI::Shell::SHERB_NOCONFIRMATION
-                        | windows::Win32::UI::Shell::SHERB_NOPROGRESSUI
-                        | windows::Win32::UI::Shell::SHERB_NOSOUND,
-                )
+        "lock" => unsafe {
+            windows::Win32::System::Shutdown::LockWorkStation()
                 .map_err(|e| e.to_string())?;
-            }
-        }
+        },
+        "empty_bin" => unsafe {
+            windows::Win32::UI::Shell::SHEmptyRecycleBinW(
+                None,
+                windows::core::PCWSTR::null(),
+                windows::Win32::UI::Shell::SHERB_NOCONFIRMATION
+                    | windows::Win32::UI::Shell::SHERB_NOPROGRESSUI
+                    | windows::Win32::UI::Shell::SHERB_NOSOUND,
+            )
+            .map_err(|e| e.to_string())?;
+        },
         "sleep" => {
             std::process::Command::new("rundll32.exe")
                 .args(["powrprof.dll,SetSuspendState", "0,1,0"])
@@ -333,34 +341,28 @@ fn pick_screen_color() -> Result<String, String> {
 #[tauri::command]
 fn copy_to_clipboard(text: String) -> Result<(), String> {
     std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", &format!("Set-Clipboard -Value '{}'", text.replace("'", "''"))])
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("Set-Clipboard -Value '{}'", text.replace("'", "''")),
+        ])
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-#[tauri::command]
-fn remove_app_alias(
-    path: String,
-    db_state: tauri::State<'_, Mutex<db::Database>>,
-) -> Result<(), String> {
-    db_state
-        .lock()
-        .map_err(|e| e.to_string())?
-        .remove_alias_by_path(&path)
-        .map_err(|e| e.to_string())
 }
 
 #[derive(serde::Serialize)]
 pub struct ClipboardItem {
     pub id: i64,
     pub content: String,
+    pub item_type: String,
+    pub preview: Option<String>,
     pub timestamp: i64,
 }
 
 #[tauri::command]
 fn get_clipboard_history(
-    db_state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<db::Database>>>,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
 ) -> Result<Vec<ClipboardItem>, String> {
     let rows = db_state
         .lock()
@@ -370,14 +372,20 @@ fn get_clipboard_history(
 
     Ok(rows
         .into_iter()
-        .map(|(id, content, timestamp)| ClipboardItem { id, content, timestamp })
+        .map(|(id, content, item_type, preview, timestamp)| ClipboardItem {
+            id,
+            content,
+            item_type,
+            preview,
+            timestamp,
+        })
         .collect())
 }
 
 #[tauri::command]
 fn delete_clipboard_item(
     id: i64,
-    db_state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<db::Database>>>,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
 ) -> Result<(), String> {
     db_state
         .lock()
@@ -387,57 +395,39 @@ fn delete_clipboard_item(
 }
 
 #[tauri::command]
-fn open_editor_window(
-    app: tauri::AppHandle,
-    id: i64,
-    content: String,
-    editor_data: tauri::State<'_, EditorData>,
-) -> Result<(), String> {
-    if let Ok(mut data) = editor_data.0.lock() {
-        *data = Some((id, content));
-    }
-
-    if let Some(win) = app.get_webview_window("editor") {
-        let _ = win.show();
-        let _ = win.set_focus();
-        let _ = win.eval("window.location.reload()");
-        return Ok(());
-    }
-
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        "editor",
-        tauri::WebviewUrl::App("index.html#editor".into()),
-    )
-    .title("Cortex Editor")
-    .inner_size(600.0, 480.0)
-    .min_inner_size(400.0, 300.0)
-    .center()
-    .resizable(true)
-    .decorations(true)
-    .always_on_top(true)
-    .build()
-    .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-fn get_editor_initial_data(
-    editor_data: tauri::State<'_, EditorData>,
-) -> Option<(i64, String)> {
-    editor_data.0.lock().ok().and_then(|d| d.clone())
-}
-
-#[tauri::command]
 fn save_edited_clipboard_item(
     id: i64,
     content: String,
-    db_state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<db::Database>>>,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
 ) -> Result<(), String> {
     db_state
         .lock()
         .map_err(|e| e.to_string())?
         .update_clipboard_entry(id, &content)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn copy_image_to_clipboard(preview_base64: String) -> Result<(), String> {
+    use base64::Engine;
+    let base64_data = preview_base64.trim_start_matches("data:image/png;base64,");
+
+    let png_bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_data)
+        .map_err(|e| e.to_string())?;
+
+    let img = image::load_from_memory(&png_bytes)
+        .map_err(|e| e.to_string())?
+        .to_rgba8();
+    let (width, height) = img.dimensions();
+
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    let img_data = arboard::ImageData {
+        width: width as usize,
+        height: height as usize,
+        bytes: std::borrow::Cow::Owned(img.into_raw()),
+    };
+
+    clipboard.set_image(img_data).map_err(|e| e.to_string())?;
+    Ok(())
 }

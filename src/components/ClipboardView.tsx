@@ -29,6 +29,7 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [filterType, setFilterType] = useState<"all" | "text" | "image">("all");
   const selectedRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,13 +51,19 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
     }
   }
 
-  const filteredItems = items.filter((item) =>
-    item.content.toLowerCase().includes(searchTerm.toLowerCase().trim())
-  );
+  const filteredItems = items
+    .filter((item) => {
+      if (filterType === "text") return item.item_type === "text";
+      if (filterType === "image") return item.item_type === "image";
+      return true;
+    })
+    .filter((item) =>
+      item.content.toLowerCase().includes(searchTerm.toLowerCase().trim())
+    );
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [searchTerm]);
+  }, [searchTerm, filterType]);
 
   useEffect(() => {
     selectedRef.current?.scrollIntoView({ block: "nearest" });
@@ -74,6 +81,15 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
+  async function handleCopyItem(item: ClipboardItem) {
+    if (item.item_type === "image" && item.preview) {
+      await invoke("copy_image_to_clipboard", { previewBase64: item.preview });
+      onBack();
+    } else {
+      onCopyAndClose(item.content);
+    }
+  }
+
   function startEditing(item: ClipboardItem) {
     setEditingItem(item);
     setEditContent(item.content);
@@ -81,21 +97,17 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
 
   async function saveAndFinish() {
     if (!editingItem) return;
-
     const trimmed = editContent.trim();
     if (trimmed) {
       await invoke("save_edited_clipboard_item", {
         id: editingItem.id,
         content: trimmed,
       });
-
       setItems((prev) =>
         prev.map((i) => (i.id === editingItem.id ? { ...i, content: trimmed } : i))
       );
-
       onCopyAndClose(trimmed);
     }
-
     setEditingItem(null);
   }
 
@@ -118,12 +130,12 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
       e.preventDefault();
       const selected = filteredItems[selectedIndex];
       if (selected) {
-        onCopyAndClose(selected.content);
+        handleCopyItem(selected);
       }
     } else if (e.key === "e" && e.ctrlKey) {
       e.preventDefault();
       const selected = filteredItems[selectedIndex];
-      if (selected) {
+      if (selected && selected.item_type === "text") {
         startEditing(selected);
       }
     } else if (e.key === "Delete" || (e.key === "Backspace" && e.ctrlKey)) {
@@ -141,7 +153,6 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
       saveAndFinish();
       return;
     }
-
     if (e.key === "Escape") {
       e.preventDefault();
       setEditingItem(null);
@@ -161,7 +172,6 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
             <button
               onClick={() => setEditingItem(null)}
               className="p-1 cursor-pointer rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Späť do zoznamu (Esc)"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -170,7 +180,6 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
               Upraviť položku schránky
             </span>
           </div>
-
           <div className="text-[11px] text-white/40 font-mono">
             {editContent.length} znakov
           </div>
@@ -204,16 +213,16 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setEditingItem(null)}
-              className="px-2.5 py-1 cursor-pointer rounded hover:bg-white/10 text-white/60 transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 rounded hover:bg-white/10 text-white/60 transition-colors flex items-center gap-1"
             >
-              <X className="w-3 h-3" />
+              <X className="w-3.5 h-3.5" />
               Zrušiť
             </button>
             <button
               onClick={saveAndFinish}
-              className="px-2.5 py-1 cursor-pointer rounded bg-amber-500 hover:bg-amber-400 text-black font-semibold transition-colors flex items-center gap-1"
+              className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-black font-semibold transition-colors flex items-center gap-1"
             >
-              <Save className="w-3 h-3" />
+              <Save className="w-3.5 h-3.5" />
               Uložiť
             </button>
           </div>
@@ -230,8 +239,7 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
       >
         <button
           onClick={onBack}
-          className="p-1 rounded cursor-pointer hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-          title="Späť (Esc)"
+          className="p-1 cursor-pointer rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
@@ -249,14 +257,43 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
         <span className="text-[10px] text-white/40 font-mono">esc späť</span>
       </div>
 
+      <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs border-b border-white/5">
+        <button
+          onClick={() => setFilterType("all")}
+          className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+            filterType === "all" ? "bg-white/20 text-white font-medium" : "text-white/40 hover:text-white"
+          }`}
+        >
+          Všetko
+        </button>
+        <button
+          onClick={() => setFilterType("text")}
+          className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+            filterType === "text" ? "bg-white/20 text-white font-medium" : "text-white/40 hover:text-white"
+          }`}
+        >
+          Texty
+        </button>
+        <button
+          onClick={() => setFilterType("image")}
+          className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${
+            filterType === "image" ? "bg-white/20 text-white font-medium" : "text-white/40 hover:text-white"
+          }`}
+        >
+          Screenshoty
+        </button>
+      </div>
+
       <div className="mt-2 overflow-y-auto flex-1 pr-1 space-y-1">
         {filteredItems.map((item, index) => {
           const isSelected = index === selectedIndex;
+          const isImage = item.item_type === "image";
+
           return (
             <div
               key={item.id}
               ref={isSelected ? selectedRef : null}
-              onClick={() => onCopyAndClose(item.content)}
+              onClick={() => handleCopyItem(item)}
               onMouseMove={() => {
                 if (selectedIndex !== index) setSelectedIndex(index);
               }}
@@ -267,32 +304,43 @@ export function ClipboardView({ onBack, onCopyAndClose }: ClipboardViewProps) {
               }}
             >
               <div className="flex items-center gap-3 overflow-hidden pr-2">
-                <div className="w-6 h-6 rounded-md bg-amber-400/20 text-amber-400 flex items-center justify-center shrink-0">
-                  <Copy className="w-3.5 h-3.5" />
-                </div>
+                {isImage && item.preview ? (
+                  <img
+                    src={item.preview}
+                    alt="Screenshot"
+                    className="w-14 h-10 object-cover rounded border border-white/10 shrink-0 bg-black/40"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-md bg-amber-400/20 text-amber-400 flex items-center justify-center shrink-0">
+                    <Copy className="w-3.5 h-3.5" />
+                  </div>
+                )}
+
                 <div className="flex flex-col min-w-0">
-                  <span className="font-mono text-xs text-white truncate max-w-[440px]">
-                    {item.content}
+                  <span className="font-mono text-xs text-white truncate max-w-[420px]">
+                    {isImage ? `Screenshot (${item.content})` : item.content}
                   </span>
                   <div className="flex items-center gap-2 text-[10px] text-white/40">
                     <span>{formatTimeAgo(item.timestamp)}</span>
                     <span>•</span>
-                    <span>{item.content.length} znakov</span>
+                    <span>{isImage ? "Obrázok" : `${item.content.length} znakov`}</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEditing(item);
-                  }}
-                  className="opacity-0 cursor-pointer group-hover:opacity-100 p-1 hover:text-amber-400 text-white/40 transition-opacity"
-                  title="Upraviť (Ctrl + E)"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
+                {!isImage && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startEditing(item);
+                    }}
+                    className="opacity-0 cursor-pointer group-hover:opacity-100 p-1 hover:text-amber-400 text-white/40 transition-opacity"
+                    title="Upraviť (Ctrl + E)"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
 
                 <button
                   onClick={(e) => {
