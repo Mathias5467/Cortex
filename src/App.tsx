@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, ExternalLink, FolderOpen, Globe, Power, Tag, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FolderOpen, Globe, Power, Tag, Trash2, ClipboardList } from "lucide-react";
 import { AppEntry, FileEntry, UnifiedResult, ActionItem } from "./types";
 import { fuzzyScore, calculateFrecency } from "./utils/fuzzy";
 import { evaluateMath } from "./utils/calc";
@@ -11,6 +11,8 @@ import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { ActionMenu } from "./components/ActionMenu";
 import { Footer } from "./components/Footer";
+import { ClipboardView } from "./components/ClipboardView";
+
 import "./App.css";
 
 function App() {
@@ -25,6 +27,7 @@ function App() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<"search" | "clipboard">("search");
 
   useEffect(() => {
     handleScan();
@@ -101,6 +104,22 @@ function App() {
       webList = [{ type: "web", data: { engine: "GitHub", query: q, url: `https://github.com/search?q=${encodeURIComponent(q)}` } }];
     }
 
+    const isClipQuery = termLower.startsWith("clip") || termLower === "cb" || termLower === "history";
+    const clipboardCommand: UnifiedResult[] = isClipQuery
+      ? [
+          {
+            type: "command",
+            data: {
+              id: "open-clipboard-history",
+              name: "Clipboard History",
+              description: "Prehliadaj a znova použi skopírované texty (alebo stlač Ctrl+H)",
+              iconName: "trash",
+              action: "system",
+            },
+          },
+        ]
+      : [];
+
     const matchedCommands: UnifiedResult[] = term
       ? SYSTEM_COMMANDS.filter((cmd) => fuzzyScore(termLower, cmd.name) > 0).map((cmd) => ({
           type: "command",
@@ -141,6 +160,7 @@ function App() {
       ...devResults,
       ...webList,
       ...matchedCommands,
+      ...clipboardCommand,
       ...appResults.map((a) => ({ type: "app" as const, data: a })),
       ...files.map((f) => ({ type: "file" as const, data: f })),
       ...fallbackWeb,
@@ -295,6 +315,11 @@ function App() {
       if (allResults.length > 0) setIsActionMenuOpen((prev) => !prev);
       return;
     }
+    if (e.key === "h" && e.ctrlKey) {
+      e.preventDefault();
+      setViewMode("clipboard");
+      return;
+    }
 
     if (isActionMenuOpen) {
       if (e.key === "Escape") {
@@ -362,6 +387,10 @@ function App() {
     if (selected.type === "calc") copyAndHide(selected.data.result.replace(/,/g, ""));
     else if (selected.type === "dev") copyAndHide(selected.data.valueToCopy);
     else if (selected.type === "command") {
+      if (selected.data.id === "open-clipboard-history") {
+        setViewMode("clipboard");
+        return;
+      }
       if (selected.data.action === "color") handlePickColor();
       else if (selected.data.command) invoke("run_system_command", { command: selected.data.command });
       closeLauncher();
@@ -444,38 +473,47 @@ function App() {
         backdropFilter: "blur(16px)",
       }}
     >
-      <SearchBar
-        inputRef={inputRef}
-        searchedTerm={searchedTerm}
-        setSearchedTerm={setSearchedTerm}
-        onKeyDown={handleKeyDown}
-        aliasingApp={aliasingApp}
-        aliasInput={aliasInput}
-        setAliasInput={setAliasInput}
-        onAliasKeyDown={handleAliasKeyDown}
-      />
+      {viewMode === "clipboard" ? (
+        <ClipboardView
+          onBack={() => setViewMode("search")}
+          onCopyAndClose={(text) => copyAndHide(text)}
+        />
+      ) : (
+        <>
+          <SearchBar
+            inputRef={inputRef}
+            searchedTerm={searchedTerm}
+            setSearchedTerm={setSearchedTerm}
+            onKeyDown={handleKeyDown}
+            aliasingApp={aliasingApp}
+            aliasInput={aliasInput}
+            setAliasInput={setAliasInput}
+            onAliasKeyDown={handleAliasKeyDown}
+          />
 
-      <ResultList
-        results={allResults}
-        selectedIndex={selectedIndex}
-        selectedRef={selectedRef}
-        aliases={aliases}
-        onSelectIndex={setSelectedIndex}
-        onExecute={executeItem}
-      />
+          <ResultList
+            results={allResults}
+            selectedIndex={selectedIndex}
+            selectedRef={selectedRef}
+            aliases={aliases}
+            onSelectIndex={setSelectedIndex}
+            onExecute={executeItem}
+          />
 
-      <ActionMenu
-        isOpen={isActionMenuOpen}
-        actions={availableActions}
-        selectedIndex={selectedActionIndex}
-        onSelectIndex={setSelectedActionIndex}
-        onExecuteAction={(action) => {
-          action.run();
-          setIsActionMenuOpen(false);
-        }}
-      />
+          <ActionMenu
+            isOpen={isActionMenuOpen}
+            actions={availableActions}
+            selectedIndex={selectedActionIndex}
+            onSelectIndex={setSelectedActionIndex}
+            onExecuteAction={(action) => {
+              action.run();
+              setIsActionMenuOpen(false);
+            }}
+          />
 
-      <Footer label={footerLabel} />
+          <Footer label={footerLabel} />
+        </>
+      )}
     </div>
   );
 }

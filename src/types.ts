@@ -17,6 +17,12 @@ export interface FileEntry {
   extension?: string;
 }
 
+export interface ClipboardItem {
+  id: number;
+  content: string;
+  timestamp: number;
+}
+
 export type UnifiedResult =
   | { type: "calc"; data: CalcResult }
   | { type: "dev"; data: DevToolResult }

@@ -43,6 +43,15 @@ impl Database {
             [],
         )?;
 
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS clipboard_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT NOT NULL UNIQUE,
+                timestamp INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -113,6 +122,66 @@ impl Database {
         self.conn.execute(
             "DELETE FROM aliases WHERE path = ?1",
             params![path],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_clipboard_entry(&self, content: &str) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT INTO clipboard_history (content, timestamp)
+             VALUES (?1, ?2)
+             ON CONFLICT(content) DO UPDATE SET timestamp = ?2",
+            rusqlite::params![content, now],
+        )?;
+
+        self.conn.execute(
+            "DELETE FROM clipboard_history WHERE id NOT IN (
+                SELECT id FROM clipboard_history ORDER BY timestamp DESC LIMIT 100
+            )",
+            [],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn get_clipboard_history(&self) -> Result<Vec<(i64, String, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, content, timestamp FROM clipboard_history ORDER BY timestamp DESC LIMIT 50",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+
+        let mut entries = Vec::new();
+        for r in rows.flatten() {
+            entries.push(r);
+        }
+        Ok(entries)
+    }
+
+    pub fn delete_clipboard_entry(&self, id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM clipboard_history WHERE id = ?1",
+            rusqlite::params![id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_clipboard_entry(&self, id: i64, new_content: &str) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "UPDATE clipboard_history SET content = ?1, timestamp = ?2 WHERE id = ?3",
+            rusqlite::params![new_content, now, id],
         )?;
         Ok(())
     }
