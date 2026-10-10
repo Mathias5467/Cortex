@@ -52,7 +52,8 @@ pub fn run() {
             files::search_user_files,
             run_system_command,
             pick_screen_color,
-            copy_to_clipboard
+            copy_to_clipboard,
+            remove_app_alias
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -301,4 +302,16 @@ fn copy_to_clipboard(text: String) -> Result<(), String> {
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn remove_app_alias(
+    path: String,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove_alias_by_path(&path)
+        .map_err(|e| e.to_string())
 }

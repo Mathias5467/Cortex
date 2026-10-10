@@ -46,6 +46,44 @@ impl Database {
         Ok(())
     }
 
+    pub fn record_launch(&self, path: &str) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT INTO app_usage (path, launch_count, last_launched)
+             VALUES (?1, 1, ?2)
+             ON CONFLICT(path) DO UPDATE SET
+                launch_count = launch_count + 1,
+                last_launched = ?2",
+            params![path, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_usage_map(&self) -> Result<std::collections::HashMap<String, (i32, i64)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, launch_count, last_launched FROM app_usage")?;
+
+        let mut map = std::collections::HashMap::new();
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
+
+        for row in rows.flatten() {
+            map.insert(row.0, (row.1, row.2));
+        }
+
+        Ok(map)
+    }
+
     pub fn set_alias(&self, alias: &str, path: &str) -> Result<()> {
         self.conn.execute(
             "INSERT INTO aliases (alias, path)
@@ -71,49 +109,11 @@ impl Database {
         Ok(map)
     }
 
-    pub fn remove_alias(&self, alias: &str) -> Result<()> {
+    pub fn remove_alias_by_path(&self, path: &str) -> Result<()> {
         self.conn.execute(
-            "DELETE FROM aliases WHERE alias = ?1",
-            params![alias.to_lowercase().trim()],
+            "DELETE FROM aliases WHERE path = ?1",
+            params![path],
         )?;
         Ok(())
-    }
-
-    pub fn record_launch(&self, path: &str) -> Result<()> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as i64;
-
-        self.conn.execute(
-            "INSERT INTO app_usage (path, launch_count, last_launched)
-             VALUES (?1, 1, ?2)
-             ON CONFLICT(path) DO UPDATE SET
-                launch_count = launch_count + 1,
-                last_launched = ?2",
-            params![path, now],
-        )?;
-        Ok(())
-    }
-
-    pub fn get_usage_map(&self) -> Result<std::collections::HashMap<String, (i32, i64)>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT path, launch_count, last_launched FROM app_usage")?;
-        
-        let mut map = std::collections::HashMap::new();
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, i32>(1)?,
-                row.get::<_, i64>(2)?,
-            ))
-        })?;
-
-        for row in rows.flatten() {
-            map.insert(row.0, (row.1, row.2));
-        }
-
-        Ok(map)
     }
 }
