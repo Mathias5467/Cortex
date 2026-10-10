@@ -18,6 +18,7 @@ import {
   Maximize2,
   Minimize2,
   Keyboard,
+  Scale
 } from "lucide-react";
 import { UnifiedResult } from "../types";
 
@@ -54,7 +55,11 @@ export function ResultItem({
           <div className="w-6 h-6 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
             <Calculator className="w-3.5 h-3.5" />
           </div>
-        ) : entry.type === "dev" ? (
+        ) : entry.type === "unit" ? (
+          <div className="w-6 h-6 rounded-md bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+            <Scale className="w-3.5 h-3.5" />
+          </div>
+        ) :  entry.type === "dev" ? (
           <div className="w-6 h-6 rounded-md bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
             <Binary className="w-3.5 h-3.5" />
           </div>
@@ -105,7 +110,16 @@ export function ResultItem({
           </div>
         )}
 
-        {entry.type === "calc" ? (
+        {entry.type === "unit" ? (
+          <div className="flex items-baseline gap-2">
+            <span className="text-base font-semibold text-white">
+              {entry.data.formattedResult}
+            </span>
+            <span className="text-xs text-white/40 font-mono">
+              ({entry.data.fromValue} {entry.data.fromUnit})
+            </span>
+          </div>
+        ) : entry.type === "calc" ? (
           <div className="flex items-baseline gap-2">
             <span className="text-base font-semibold text-white">{entry.data.result}</span>
             <span className="text-xs text-white/40 font-mono">({entry.data.expression})</span>

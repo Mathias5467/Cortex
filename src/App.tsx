@@ -13,7 +13,7 @@ import { ActionMenu } from "./components/ActionMenu";
 import { Footer } from "./components/Footer";
 import { ClipboardView } from "./components/ClipboardView";
 import { TypingGame } from "./components/TypingGame";
-
+import { convertUnits } from "./utils/unitsConverter";
 import "./App.css";
 
 function App() {
@@ -85,6 +85,11 @@ function App() {
     const term = searchedTerm.trim();
     const termLower = term.toLowerCase();
 
+    const unitResult = convertUnits(term);
+    const unitList: UnifiedResult[] = unitResult
+      ? [{ type: "unit", data: unitResult }]
+      : [];
+
     const devResults: UnifiedResult[] = evaluateDevTools(term).map((d) => ({
       type: "dev",
       data: d,
@@ -142,6 +147,7 @@ function App() {
 
     return [
       ...calcList,
+      ...unitList,
       ...devResults,
       ...webList,
       ...matchedCommands,
@@ -207,6 +213,24 @@ function App() {
           shortcut: "↵",
           icon: <Copy className="w-3.5 h-3.5" />,
           run: () => copyAndHide(currentItem.data.valueToCopy),
+        },
+      ];
+    }
+
+    if (currentItem.type === "unit") {
+      return [
+        {
+          id: "copy-unit-val",
+          label: `Copy Value (${currentItem.data.toValue})`,
+          shortcut: "↵",
+          icon: <Copy className="w-3.5 h-3.5" />,
+          run: () => copyAndHide(currentItem.data.toValue.toString()),
+        },
+        {
+          id: "copy-unit-formatted",
+          label: `Copy with Unit (${currentItem.data.formattedResult})`,
+          icon: <Copy className="w-3.5 h-3.5 opacity-60" />,
+          run: () => copyAndHide(currentItem.data.formattedResult),
         },
       ];
     }
@@ -369,6 +393,7 @@ function App() {
 
   function executeItem(selected: UnifiedResult) {
     if (selected.type === "calc") copyAndHide(selected.data.result.replace(/,/g, ""));
+    else if (selected.type === "unit") copyAndHide(selected.data.toValue.toString());
     else if (selected.type === "dev") copyAndHide(selected.data.valueToCopy);
     else if (selected.type === "command") {
       if (selected.data.id === "open-clipboard-history") {
@@ -452,6 +477,7 @@ function App() {
     if (currentItem.type === "command") return `System: ${currentItem.data.description}`;
     if (currentItem.type === "web") return `Open URL: ${currentItem.data.url}`;
     if (currentItem.type === "dev") return `Copy: ${currentItem.data.title}`;
+    if (currentItem.type === "unit") return `Convert: ${currentItem.data.fromValue} ${currentItem.data.fromUnit} = ${currentItem.data.formattedResult}`;
     return currentItem.data.path;
   }, [currentItem]);
 

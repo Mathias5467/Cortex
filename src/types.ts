@@ -1,6 +1,7 @@
 import { CalcResult } from "./utils/calc";
 import { DevToolResult } from "./utils/devTools";
 import { SystemCommand } from "./utils/systemCommands";
+import { UnitConversionResult } from "./utils/unitsConverter";
 
 export interface AppEntry {
   name: string;
@@ -27,6 +28,7 @@ export interface ClipboardItem {
 
 export type UnifiedResult =
   | { type: "calc"; data: CalcResult }
+  | { type: "unit"; data: UnitConversionResult }
   | { type: "dev"; data: DevToolResult }
   | { type: "command"; data: SystemCommand }
   | { type: "web"; data: { engine: string; query: string; url: string } }

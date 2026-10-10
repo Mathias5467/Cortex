@@ -39,6 +39,8 @@ export function ResultList({
         const itemKey =
           entry.type === "calc"
             ? "calc-result"
+            : entry.type === "unit"
+            ? "unit-result"
             : entry.type === "dev"
             ? entry.data.id
             : entry.type === "command"
@@ -53,6 +55,8 @@ export function ResultList({
               <div className="text-[10px] font-bold tracking-wider text-white/40 px-3 pt-2 pb-1 uppercase">
                 {entry.type === "calc"
                   ? "Calculator"
+                  : entry.type === "unit"
+                  ? "Unit Conversion"
                   : entry.type === "dev"
                   ? "Developer Tools"
                   : entry.type === "web"
