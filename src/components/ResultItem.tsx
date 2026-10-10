@@ -17,6 +17,7 @@ import {
   PanelRight,
   Maximize2,
   Minimize2,
+  Keyboard,
 } from "lucide-react";
 import { UnifiedResult } from "../types";
 
@@ -70,6 +71,7 @@ export function ResultItem({
             {entry.data.iconName === "window-right" && <PanelRight className="w-3.5 h-3.5" />}
             {entry.data.iconName === "window-max" && <Maximize2 className="w-3.5 h-3.5" />}
             {entry.data.iconName === "window-center" && <Minimize2 className="w-3.5 h-3.5" />}
+            {entry.data.iconName === "keyboard" && <Keyboard className="w-3.5 h-3.5" />}
           </div>
         ) : entry.type === "web" ? (
           <div className="w-6 h-6 rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">

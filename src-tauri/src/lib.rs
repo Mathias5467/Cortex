@@ -121,6 +121,8 @@ pub fn run() {
             save_edited_clipboard_item,
             copy_image_to_clipboard,
             window_manager::snap_window,
+            save_typing_result,
+            get_best_typing_score,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -432,4 +434,28 @@ fn copy_image_to_clipboard(preview_base64: String) -> Result<(), String> {
 
     clipboard.set_image(img_data).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn save_typing_result(
+    wpm: i32,
+    accuracy: i32,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .save_typing_score(wpm, accuracy)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_best_typing_score(
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<i32, String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get_best_typing_wpm()
+        .map_err(|e| e.to_string())
 }

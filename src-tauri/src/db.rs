@@ -61,6 +61,15 @@ impl Database {
             )",
             [],
         )?;
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS typing_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wpm INTEGER NOT NULL,
+                accuracy INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL
+            )",
+            [],
+        )?;
 
         let _ = self.conn.execute(
             "ALTER TABLE clipboard_history ADD COLUMN item_type TEXT NOT NULL DEFAULT 'text'",
@@ -231,5 +240,24 @@ impl Database {
             entries.push(r);
         }
         Ok(entries)
+    }
+
+    pub fn save_typing_score(&self, wpm: i32, accuracy: i32) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT INTO typing_scores (wpm, accuracy, timestamp) VALUES (?1, ?2, ?3)",
+            rusqlite::params![wpm, accuracy, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_best_typing_wpm(&self) -> Result<i32> {
+        let mut stmt = self.conn.prepare("SELECT COALESCE(MAX(wpm), 0) FROM typing_scores")?;
+        let best: i32 = stmt.query_row([], |row| row.get(0))?;
+        Ok(best)
     }
 }

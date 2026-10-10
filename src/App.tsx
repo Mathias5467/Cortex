@@ -12,6 +12,7 @@ import { ResultList } from "./components/ResultList";
 import { ActionMenu } from "./components/ActionMenu";
 import { Footer } from "./components/Footer";
 import { ClipboardView } from "./components/ClipboardView";
+import { TypingGame } from "./components/TypingGame";
 
 import "./App.css";
 
@@ -27,7 +28,7 @@ function App() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<"search" | "clipboard">("search");
+  const [viewMode, setViewMode] = useState<"search" | "clipboard" | "typing">("search");
 
   useEffect(() => {
     handleScan();
@@ -374,6 +375,10 @@ function App() {
         setViewMode("clipboard");
         return;
       }
+      if (selected.data.id === "open-typing-game") {
+        setViewMode("typing");
+        return;
+      }
       if (selected.data.action === "color") handlePickColor();
       else if (selected.data.action === "window" && selected.data.command) {
         invoke("snap_window", { action: selected.data.command });
@@ -464,6 +469,8 @@ function App() {
           onBack={() => setViewMode("search")}
           onCopyAndClose={(text) => copyAndHide(text)}
         />
+      ) : viewMode === "typing" ? (
+        <TypingGame onBack={() => setViewMode("search")} />
       ) : (
         <>
           <SearchBar

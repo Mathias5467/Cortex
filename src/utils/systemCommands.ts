@@ -2,7 +2,7 @@ export interface SystemCommand {
   id: string;
   name: string;
   description: string;
-  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard" | "window-left" | "window-right" | "window-max" | "window-center";
+  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard" | "window-left" | "window-right" | "window-max" | "window-center" | "keyboard";
   action: "system" | "web" | "color" | "window";
   command?: string;
   urlTemplate?: string;
@@ -94,5 +94,12 @@ export const SYSTEM_COMMANDS: SystemCommand[] = [
     iconName: "window-center",
     action: "window",
     command: "center",
+  },
+  {
+    id: "open-typing-game",
+    name: "Typing Practice",
+    description: "Monkeytype-style speed test (15s)",
+    iconName: "keyboard",
+    action: "system",
   },
 ];
