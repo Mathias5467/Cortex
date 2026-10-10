@@ -1,18 +1,20 @@
+function stripAccents(str: string): string {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
 
 export function fuzzyScore(query: string, target: string): number {
-  const q = query.trim().toLowerCase();
-  const t = target.toLowerCase();
+  const q = stripAccents(query.trim().toLowerCase());
+  const t = stripAccents(target.toLowerCase());
 
   if (!q) return 1;
-
   if (q === t) return 1000;
 
   if (t.startsWith(q)) {
     return 500 - (t.length - q.length);
   }
 
-  const words = target.split(/[\s\-_\.]+/).filter(Boolean);
-  const acronym = words.map((w) => w[0]?.toLowerCase() || "").join("");
+  const words = t.split(/[\s\-_\.]+/).filter(Boolean);
+  const acronym = words.map((w) => w[0] || "").join("");
   if (acronym.startsWith(q)) return 400;
   if (acronym.includes(q)) return 300;
 
@@ -54,22 +56,15 @@ export function fuzzyScore(query: string, target: string): number {
 
 export function calculateFrecency(launchCount: number, lastLaunchedSeconds: number): number {
   if (!launchCount || !lastLaunchedSeconds) return 0;
-
   const nowSeconds = Math.floor(Date.now() / 1000);
   const ageSeconds = Math.max(0, nowSeconds - lastLaunchedSeconds);
 
   let recencyMultiplier = 10;
-  if (ageSeconds < 4 * 3600) {
-    recencyMultiplier = 100;
-  } else if (ageSeconds < 24 * 3600) {
-    recencyMultiplier = 80;
-  } else if (ageSeconds < 3 * 86400) {
-    recencyMultiplier = 60;
-  } else if (ageSeconds < 7 * 86400) {
-    recencyMultiplier = 40;
-  } else if (ageSeconds < 30 * 86400) {
-    recencyMultiplier = 20;
-  }
+  if (ageSeconds < 4 * 3600) recencyMultiplier = 100;
+  else if (ageSeconds < 24 * 3600) recencyMultiplier = 80;
+  else if (ageSeconds < 3 * 86400) recencyMultiplier = 60;
+  else if (ageSeconds < 7 * 86400) recencyMultiplier = 40;
+  else if (ageSeconds < 30 * 86400) recencyMultiplier = 20;
 
   return launchCount * recencyMultiplier;
 }

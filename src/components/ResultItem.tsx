@@ -18,7 +18,9 @@ import {
   Maximize2,
   Minimize2,
   Keyboard,
-  Scale
+  Scale,
+  Layers,
+  FolderPlus,
 } from "lucide-react";
 import { UnifiedResult } from "../types";
 
@@ -55,6 +57,10 @@ export function ResultItem({
           <div className="w-6 h-6 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
             <Calculator className="w-3.5 h-3.5" />
           </div>
+        ) : entry.type === "workspace" ? (
+          <div className="w-6 h-6 rounded-md bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+            <Layers className="w-3.5 h-3.5" />
+          </div>
         ) : entry.type === "unit" ? (
           <div className="w-6 h-6 rounded-md bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
             <Scale className="w-3.5 h-3.5" />
@@ -77,6 +83,7 @@ export function ResultItem({
             {entry.data.iconName === "window-max" && <Maximize2 className="w-3.5 h-3.5" />}
             {entry.data.iconName === "window-center" && <Minimize2 className="w-3.5 h-3.5" />}
             {entry.data.iconName === "keyboard" && <Keyboard className="w-3.5 h-3.5" />}
+            {entry.data.iconName === "layers" && <FolderPlus className="w-3.5 h-3.5" />}
           </div>
         ) : entry.type === "web" ? (
           <div className="w-6 h-6 rounded-md bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
@@ -118,6 +125,11 @@ export function ResultItem({
             <span className="text-xs text-white/40 font-mono">
               ({entry.data.fromValue} {entry.data.fromUnit})
             </span>
+          </div>
+        ) : entry.type === "workspace" ? (
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-white">{entry.data.name}</span>
+            <span className="text-[11px] text-white/40">{entry.data.description}</span>
           </div>
         ) : entry.type === "calc" ? (
           <div className="flex items-baseline gap-2">

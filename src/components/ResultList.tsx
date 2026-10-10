@@ -41,6 +41,8 @@ export function ResultList({
             ? "calc-result"
             : entry.type === "unit"
             ? "unit-result"
+            : entry.type === "workspace"
+            ? `ws-${entry.data.id}`
             : entry.type === "dev"
             ? entry.data.id
             : entry.type === "command"
@@ -57,6 +59,8 @@ export function ResultList({
                   ? "Calculator"
                   : entry.type === "unit"
                   ? "Unit Conversion"
+                  : entry.type === "workspace"
+                  ? "Workspaces & Bundles"
                   : entry.type === "dev"
                   ? "Developer Tools"
                   : entry.type === "web"

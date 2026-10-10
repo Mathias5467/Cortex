@@ -2,7 +2,7 @@ export interface SystemCommand {
   id: string;
   name: string;
   description: string;
-  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard" | "window-left" | "window-right" | "window-max" | "window-center" | "keyboard";
+  iconName: "lock" | "trash" | "moon" | "power" | "rotate" | "pipette" | "clipboard" | "window-left" | "window-right" | "window-max" | "window-center" | "keyboard" | "layers";
   action: "system" | "web" | "color" | "window";
   command?: string;
   urlTemplate?: string;
@@ -100,6 +100,13 @@ export const SYSTEM_COMMANDS: SystemCommand[] = [
     name: "Typing Practice",
     description: "Monkeytype-style speed test (15s)",
     iconName: "keyboard",
+    action: "system",
+  },
+  {
+    id: "create-workspace-cmd",
+    name: "Create Workspace",
+    description: "Vytvor nový balíček aplikácií a webov na 1 klik",
+    iconName: "layers",
     action: "system",
   },
 ];

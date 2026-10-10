@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, ExternalLink, FolderOpen, Globe, Power, Tag, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FolderOpen, Globe, Power, Tag, Trash2, Layers } from "lucide-react";
 import { AppEntry, FileEntry, UnifiedResult, ActionItem } from "./types";
 import { fuzzyScore, calculateFrecency } from "./utils/fuzzy";
 import { evaluateMath } from "./utils/calc";
@@ -14,6 +14,8 @@ import { Footer } from "./components/Footer";
 import { ClipboardView } from "./components/ClipboardView";
 import { TypingGame } from "./components/TypingGame";
 import { convertUnits } from "./utils/unitsConverter";
+import { Workspace } from "./types";
+import { WorkspaceModal } from "./components/WorkspaceModal";
 import "./App.css";
 
 function App() {
@@ -29,10 +31,14 @@ function App() {
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [selectedActionIndex, setSelectedActionIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"search" | "clipboard" | "typing">("search");
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
 
   useEffect(() => {
     handleScan();
     loadAliases();
+    loadWorkspaces();
 
     const appWindow = getCurrentWindow();
     const unlisten = appWindow.onFocusChanged(({ payload: focused }) => {
@@ -53,6 +59,15 @@ function App() {
     try {
       const res = await invoke<Record<string, string>>("get_aliases");
       setAliases(res);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadWorkspaces() {
+    try {
+      const res = await invoke<Workspace[]>("get_all_workspaces");
+      setWorkspaces(res);
     } catch (err) {
       console.error(err);
     }
@@ -89,6 +104,12 @@ function App() {
     const unitList: UnifiedResult[] = unitResult
       ? [{ type: "unit", data: unitResult }]
       : [];
+
+    const matchedWorkspaces: UnifiedResult[] = term
+      ? workspaces
+          .filter((w) => fuzzyScore(termLower, w.name) > 0)
+          .map((w) => ({ type: "workspace", data: w }))
+      : workspaces.map((w) => ({ type: "workspace", data: w }));
 
     const devResults: UnifiedResult[] = evaluateDevTools(term).map((d) => ({
       type: "dev",
@@ -148,6 +169,7 @@ function App() {
     return [
       ...calcList,
       ...unitList,
+      ...matchedWorkspaces,
       ...devResults,
       ...webList,
       ...matchedCommands,
@@ -170,6 +192,41 @@ function App() {
           shortcut: "↵",
           icon: <Copy className="w-3.5 h-3.5" />,
           run: () => copyAndHide(currentItem.data.result.replace(/,/g, "")),
+        },
+      ];
+    }
+    if (currentItem.type === "workspace") {
+      const ws = currentItem.data;
+      return [
+        {
+          id: "launch-ws",
+          label: `Spustiť bundle (${ws.targets.length} položiek)`,
+          shortcut: "↵",
+          icon: <Layers className="w-3.5 h-3.5" />,
+          run: () => {
+            invoke("launch_workspace", { targets: ws.targets });
+            closeLauncher();
+          },
+        },
+        {
+          id: "edit-ws",
+          label: "Upraviť položky balíčka",
+          shortcut: "Ctrl E",
+          icon: <Tag className="w-3.5 h-3.5" />,
+          run: () => {
+            setEditingWorkspace(ws);
+            setIsActionMenuOpen(false);
+          },
+        },
+        {
+          id: "delete-ws",
+          label: `Zmazať Workspace`,
+          icon: <Trash2 className="w-3.5 h-3.5 text-red-400" />,
+          run: async () => {
+            await invoke("delete_workspace_by_id", { id: ws.id });
+            await loadWorkspaces();
+            setIsActionMenuOpen(false);
+          },
         },
       ];
     }
@@ -391,9 +448,29 @@ function App() {
     }
   }
 
+  async function handleSaveWorkspace(id: number | undefined, name: string, description: string, targets: string[]) {
+    try {
+      await invoke("save_workspace_item", {
+        id: id ?? null,
+        name,
+        description,
+        targets,
+      });
+      await loadWorkspaces();
+      setIsCreatingWorkspace(false);
+      setEditingWorkspace(null);
+    } catch (err) {
+      console.error("Chyba pri ukladaní workspace:", err);
+    }
+  }
+
   function executeItem(selected: UnifiedResult) {
     if (selected.type === "calc") copyAndHide(selected.data.result.replace(/,/g, ""));
     else if (selected.type === "unit") copyAndHide(selected.data.toValue.toString());
+    else if (selected.type === "workspace") {
+      invoke("launch_workspace", { targets: selected.data.targets });
+      closeLauncher();
+    }
     else if (selected.type === "dev") copyAndHide(selected.data.valueToCopy);
     else if (selected.type === "command") {
       if (selected.data.id === "open-clipboard-history") {
@@ -402,6 +479,11 @@ function App() {
       }
       if (selected.data.id === "open-typing-game") {
         setViewMode("typing");
+        return;
+      }
+      if (selected.data.id === "create-workspace-cmd") {
+        setEditingWorkspace(null);
+        setIsCreatingWorkspace(true);
         return;
       }
       if (selected.data.action === "color") handlePickColor();
@@ -478,6 +560,7 @@ function App() {
     if (currentItem.type === "web") return `Open URL: ${currentItem.data.url}`;
     if (currentItem.type === "dev") return `Copy: ${currentItem.data.title}`;
     if (currentItem.type === "unit") return `Convert: ${currentItem.data.fromValue} ${currentItem.data.fromUnit} = ${currentItem.data.formattedResult}`;
+    if (currentItem.type === "workspace") return `Workspace: ${currentItem.data.name} (${currentItem.data.targets.length} položiek)`;
     return currentItem.data.path;
   }, [currentItem]);
 
@@ -490,7 +573,17 @@ function App() {
         backdropFilter: "blur(16px)",
       }}
     >
-      {viewMode === "clipboard" ? (
+      {isCreatingWorkspace || editingWorkspace ? (
+        <WorkspaceModal
+          initialWorkspace={editingWorkspace}
+          installedApps={apps}
+          onSave={handleSaveWorkspace}
+          onCancel={() => {
+            setIsCreatingWorkspace(false);
+            setEditingWorkspace(null);
+          }}
+        />
+      ) : viewMode === "clipboard" ? (
         <ClipboardView
           onBack={() => setViewMode("search")}
           onCopyAndClose={(text) => copyAndHide(text)}

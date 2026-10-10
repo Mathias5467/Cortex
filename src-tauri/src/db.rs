@@ -71,6 +71,46 @@ impl Database {
             [],
         )?;
 
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL,
+                targets TEXT NOT NULL, -- JSON pole cieľov: appky, linky, priečinky
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM workspaces",
+            [],
+            |r| r.get(0),
+        ).unwrap_or(0);
+
+        if count == 0 {
+            let default_targets = serde_json::json!([
+                "https://scholar.google.com",
+                "https://overleaf.com"
+            ]).to_string();
+
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+
+            let _ = self.conn.execute(
+                "INSERT INTO workspaces (name, description, targets, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    "Bakalárska práca",
+                    "Otvorí Word, zdroje a priečinok",
+                    default_targets,
+                    now
+                ],
+            );
+        }
+
         let _ = self.conn.execute(
             "ALTER TABLE clipboard_history ADD COLUMN item_type TEXT NOT NULL DEFAULT 'text'",
             [],
@@ -259,5 +299,56 @@ impl Database {
         let mut stmt = self.conn.prepare("SELECT COALESCE(MAX(wpm), 0) FROM typing_scores")?;
         let best: i32 = stmt.query_row([], |row| row.get(0))?;
         Ok(best)
+    }
+
+    pub fn get_workspaces(&self) -> Result<Vec<(i64, String, String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT id, name, description, targets FROM workspaces")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?;
+
+        let mut list = Vec::new();
+        for r in rows.flatten() {
+            list.push(r);
+        }
+        Ok(list)
+    }
+
+    pub fn save_or_update_workspace(
+        &self,
+        id: Option<i64>,
+        name: &str,
+        description: &str,
+        targets_json: &str,
+    ) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let mut updated = 0;
+
+        if let Some(existing_id) = id {
+            updated = self.conn.execute(
+                "UPDATE workspaces SET name = ?1, description = ?2, targets = ?3 WHERE id = ?4",
+                rusqlite::params![name, description, targets_json, existing_id],
+            )?;
+        }
+
+        if updated == 0 {
+            self.conn.execute(
+                "INSERT INTO workspaces (name, description, targets, created_at)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(name) DO UPDATE SET description = ?2, targets = ?3",
+                rusqlite::params![name, description, targets_json, now],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn delete_workspace(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM workspaces WHERE id = ?1", rusqlite::params![id])?;
+        Ok(())
     }
 }

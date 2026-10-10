@@ -29,6 +29,7 @@ export interface ClipboardItem {
 export type UnifiedResult =
   | { type: "calc"; data: CalcResult }
   | { type: "unit"; data: UnitConversionResult }
+  | { type: "workspace"; data: Workspace }
   | { type: "dev"; data: DevToolResult }
   | { type: "command"; data: SystemCommand }
   | { type: "web"; data: { engine: string; query: string; url: string } }
@@ -41,4 +42,11 @@ export interface ActionItem {
   shortcut?: string;
   icon: React.ReactNode;
   run: () => void;
+}
+
+export interface Workspace {
+  id: number;
+  name: string;
+  description: string;
+  targets: string[];
 }

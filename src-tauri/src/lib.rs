@@ -123,6 +123,10 @@ pub fn run() {
             window_manager::snap_window,
             save_typing_result,
             get_best_typing_score,
+            get_all_workspaces,
+            launch_workspace,
+            save_workspace_item,
+            delete_workspace_by_id,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -457,5 +461,70 @@ fn get_best_typing_score(
         .lock()
         .map_err(|e| e.to_string())?
         .get_best_typing_wpm()
+        .map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct WorkspaceData {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub targets: Vec<String>,
+}
+
+#[tauri::command]
+fn get_all_workspaces(
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<Vec<WorkspaceData>, String> {
+    let rows = db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get_workspaces()
+        .map_err(|e| e.to_string())?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(id, name, description, targets_raw)| {
+            let targets: Vec<String> = serde_json::from_str(&targets_raw).unwrap_or_default();
+            WorkspaceData { id, name, description, targets }
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn launch_workspace(targets: Vec<String>) -> Result<(), String> {
+    for target in targets {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", &target])
+            .spawn();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_workspace_by_id(
+    id: i64,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .delete_workspace(id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_workspace_item(
+    id: Option<i64>,
+    name: String,
+    description: String,
+    targets: Vec<String>,
+    db_state: tauri::State<'_, Mutex<db::Database>>,
+) -> Result<(), String> {
+    let targets_json = serde_json::to_string(&targets).map_err(|e| e.to_string())?;
+    db_state
+        .lock()
+        .map_err(|e| e.to_string())?
+        .save_or_update_workspace(id, &name, &description, &targets_json)
         .map_err(|e| e.to_string())
 }
