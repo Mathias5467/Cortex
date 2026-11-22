@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+@theme static {
+  --color-accent: #ff6363;
+  --color-accent-hover: #ff8080;
+  --color-on-accent: #1c0a0a;
+  --color-danger: #f43f7a;
+
+  --color-app: rgba(24, 24, 27, 0.85);
+  --color-popover: rgba(26, 26, 30, 0.97);
+  --color-well: rgba(0, 0, 0, 0.3);
+  --color-field: rgba(255, 255, 255, 0.05);
+  --color-hover: rgba(255, 255, 255, 0.1);
+  --color-hover-strong: rgba(255, 255, 255, 0.2);
+  --color-selected: rgba(255, 255, 255, 0.18);
+
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.12);
+
+  --color-content: #ffffff;
+  --color-secondary: rgba(255, 255, 255, 0.6);
+  --color-muted: rgba(255, 255, 255, 0.4);
+  --color-faint: rgba(255, 255, 255, 0.25);
+}
+
+html,
+body,
+#root {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+input,
+textarea {
+  caret-color: var(--color-accent);
+  color-scheme: dark;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+.markdown {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.1em 0 0.5em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.markdown h1 {
+  font-size: 1.7em;
+}
+
+.markdown h2 {
+  font-size: 1.4em;
+}
+
+.markdown h3 {
+  font-size: 1.15em;
+}
+
+.markdown :is(h1, h2) {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--color-line-strong);
+}
+
+.markdown :is(p, ul, ol, blockquote, table, pre) {
+  margin: 0.65em 0;
+}
+
+.markdown :is(ul, ol) {
+  padding-left: 1.5em;
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown .contains-task-list {
+  list-style: none;
+  padding-left: 0.25em;
+}
+
+.markdown input[type="checkbox"] {
+  margin-right: 0.4em;
+  accent-color: var(--color-accent);
+}
+
+.markdown a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.markdown code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--color-hover);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.markdown pre {
+  padding: 0.75em;
+  border-radius: 8px;
+  background: var(--color-well);
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown blockquote {
+  padding-left: 0.9em;
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-secondary);
+}
+
+.markdown table {
+  border-collapse: collapse;
+}
+
+.markdown :is(th, td) {
+  padding: 0.35em 0.7em;
+  border: 1px solid var(--color-line-strong);
+}
+
+.markdown th {
+  background: var(--color-field);
+}
+
+.markdown hr {
+  margin: 1.2em 0;
+  border-color: var(--color-line-strong);
+}
+
+.markdown img {
+  max-width: 100%;
+  border-radius: 8px;
+}
